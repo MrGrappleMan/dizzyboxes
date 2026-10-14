@@ -1,10 +1,16 @@
 name: Build and Push Ubuntu Toolbox Image
 on:
-  pull_request:
-    paths-ignore:
-      - "**.md"
+  # Scheduled builds not needed as user can updates packages on their side
+  workflow_dispatch: # Let builds be made when triggered
   merge_group:
-  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+    paths-ignore: # don't rebuild on documentation change
+      - '**.md'
 permissions: {}
 
 env:
