@@ -1,0 +1,53 @@
+# Containerfile
+
+# Link essential files
+    FROM scratch AS ctx
+    # 'ctx' means context
+    # The FROM action here explicitly appends the 'ctx' name to the target=/ctx folder, is where that directory name actually comes from.
+    # This path only exists for usage during build time, as a "portal" for your file into the image
+
+# Copy image build files
+    COPY ./variants/ubuntu/ctx-contents/ /
+    # COPY XYZ ABC
+    # XYZ - some path in your repo
+    # ABC - some subpath inside '/ctx/'. Here, we just copy the contents directly.
+    # If referencing anything from /ctx/ from the Containerfile with RUN, include '--mount=type=bind,from=ctx,source=/,target=/ctx'
+    # Linking the root of the repo directly is messy and not recommended
+
+# Use Ubuntu for building
+    FROM docker.io/library/ubuntu:26.04 AS builder
+
+# Get fish
+    RUN apt update \
+        apt install fish -y
+
+# Modifier
+    ARG DEBIAN_FRONTEND=noninteractive
+    RUN --mount=type=cache,dst=/var/cache/apt \
+        --mount=type=cache,dst=/var/log \
+        --mount=type=cache,dst=/var/lib/apt \
+        --mount=type=cache,dst=/var/lib/dpkg/updates \
+        --mount=type=tmpfs,dst=/tmp \
+        fish /ctx/build-image.fish
+
+
+
+# https://github.com/coreos/chunkah
+FROM quay.io/coreos/chunkah:latest AS chunkah
+
+# Rechunk
+ARG SOURCE_DATE_EPOCH
+ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}
+RUN --mount=from=builder,src=/,target=/chunkah,ro \
+    --mount=type=bind,target=/run/src,rw \
+    chunkah build \
+    --max-layers 1024 \
+    --label=com.github.containers.toolbox=true \
+    --label=name=ubuntu \
+    --label=usage="This image is meant to be used with the toolbox or distrobox command" \
+    --label=summary="Compatibility focused modern Ubuntu image" \
+    --label=maintainer=jorge.castro@gmail.com \
+    > /run/src/out.ociarchive
+
+# Deploy final chunked image
+FROM oci-archive:out.ociarchive
